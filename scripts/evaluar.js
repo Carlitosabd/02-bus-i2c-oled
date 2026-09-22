@@ -10,6 +10,18 @@
  *   node scripts/evaluar.js 2    -> Evalúa solo el Reto 02 (pnpm run start:02)
  *   node scripts/evaluar.js 3    -> Evalúa solo el Reto 03 (pnpm run start:03)
  *   node scripts/evaluar.js 4    -> Evalúa solo el Reto 04 (pnpm run start:04)
+ *
+ * REGLA DE ORO DE ESTE EVALUADOR
+ * ----------------------------------------------------------------------------
+ * Solo se evalúa CÓDIGO EJECUTABLE. Los comentarios se descartan antes de
+ * analizar. Motivo: el andamiaje pedagógico describe las funciones esperadas
+ * en comentarios ("Preguntas Guía"), y si se analizaran los comentarios, un
+ * archivo SIN resolver aprobaría todos los chequeos. Este evaluador mide
+ * trabajo real del estudiante, no la presencia de pistas docentes.
+ * ----------------------------------------------------------------------------
+ * Un bloque se considera COMPLETADO cuando el código real cumple los 4
+ * criterios técnicos del bloque. Dejar el marcador /* ESCRIBE TU CÓDIGO AQUÍ *\/
+ * NO resta puntaje (es una advertencia de limpieza), pero tampoco lo otorga.
  */
 
 const fs = require('fs');
@@ -31,10 +43,47 @@ const c = {
   magenta: '\x1b[35m'
 };
 
+const MARCADOR_ANDAMIAJE = 'ESCRIBE TU CÓDIGO AQUÍ';
+
 function leerArchivo(relPath) {
   const fullPath = path.join(rootDir, relPath);
   if (!fs.existsSync(fullPath)) return null;
   return fs.readFileSync(fullPath, 'utf8');
+}
+
+/**
+ * Descarta comentarios de bloque y de línea para analizar únicamente el código
+ * real. Se protege "://" para no romper URLs dentro de cadenas.
+ */
+function soloCodigo(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
+/** Cuenta cuántos marcadores de andamiaje quedaron sin borrar (solo informativo). */
+function marcadoresRestantes(src) {
+  return src.split(MARCADOR_ANDAMIAJE).length - 1;
+}
+
+/**
+ * Devuelve el CUERPO de una función, apareando llaves. Se usa para exigir llamadas
+ * reales dentro de una rutina: sin esto, basta con que el nombre de la función
+ * aparezca declarado o definido en cualquier parte para que el criterio pase.
+ */
+function cuerpoDe(codigo, nombre) {
+  const m = new RegExp(`\\b${nombre}\\s*\\([^)]*\\)\\s*\\{`, 'i').exec(codigo);
+  if (!m) return '';
+  let i = m.index + m[0].length;
+  const inicio = i;
+  let profundidad = 1;
+  while (i < codigo.length && profundidad > 0) {
+    const ch = codigo[i];
+    if (ch === '{') profundidad++;
+    else if (ch === '}') profundidad--;
+    i++;
+  }
+  return codigo.slice(inicio, i - 1);
 }
 
 let violaciones = [];
@@ -48,6 +97,40 @@ function checkForbidden(content, file) {
   if (/socr[aá]t/i.test(content)) {
     violaciones.push(`Archivo '${file}' contiene jerga 'socrática'. Usar 'Preguntas Guía' o 'Preguntas de Pizarra'.`);
   }
+}
+
+/** Evalúa el código real de un bloque y devuelve su puntaje. */
+function evaluarCodigoReal(relPath, nombreReto, criterios) {
+  console.log(`${c.bold}${nombreReto}${c.reset}`);
+  const original = leerArchivo(relPath);
+  if (!original) {
+    console.log(`  ${c.red}✖ Archivo '${relPath}' no encontrado.${c.reset}`);
+    return 0;
+  }
+
+  const codigo = soloCodigo(original);
+  checkForbidden(codigo, relPath);
+
+  const resultados = criterios(codigo);
+  const aprobados = resultados.filter(r => r.ok).length;
+  const completado = aprobados === resultados.length;
+
+  if (completado) {
+    console.log(`  ${c.green}${c.bold}ESTADO: ¡RETO COMPLETADO! (1.00 / 1.00 pt)${c.reset}`);
+  } else {
+    console.log(`  ${c.yellow}${c.bold}ESTADO: EN PROCESO / PENDIENTE (${aprobados}/${resultados.length} criterios · 0.00 / 1.00 pt)${c.reset}`);
+  }
+
+  resultados.forEach(r => {
+    console.log(`    ${r.ok ? c.green + '✔' : c.yellow + '✖'} ${r.msg}${c.reset}`);
+  });
+
+  const pendientes = marcadoresRestantes(original);
+  if (pendientes > 0) {
+    console.log(`    ${c.magenta}ℹ ${pendientes} marcador(es) 'ESCRIBE TU CÓDIGO AQUÍ' sin borrar. No afecta tu nota, pero limpia el archivo.${c.reset}`);
+  }
+
+  return completado ? 1.0 : 0.0;
 }
 
 // Encabezado
@@ -67,179 +150,103 @@ let bloquesCompletados = 0;
 // EVALUACIÓN BLOQUE 1
 // ----------------------------------------------------------------------------
 function evaluarBloque1() {
-  console.log(`${c.bold}🟢 Reto 01: Escáner de Direcciones de Hardware I2C (0x3C)${c.reset}`);
-  const b1 = leerArchivo('bloque_1/src/bloque_1.ino');
-  if (!b1) {
-    console.log(`  ${c.red}✖ Archivo 'bloque_1/src/bloque_1.ino' no encontrado.${c.reset}`);
-    return;
-  }
-  checkForbidden(b1, 'bloque_1/src/bloque_1.ino');
-
-  const hasWireBegin = /Wire\.begin\s*\(\s*(21|I2C_SDA_PIN)\s*,\s*(22|I2C_SCL_PIN)\s*\)/i.test(b1) || /Wire\.begin\s*\(/i.test(b1);
-  const hasWireClock = /Wire\.setClock\s*\(\s*(400000|I2C_CLOCK_SPEED)\s*\)/i.test(b1);
-  const hasTransmission = /Wire\.beginTransmission\s*\(/i.test(b1) && /Wire\.endTransmission\s*\(/i.test(b1);
-  const hasAckCheck = /error\s*==\s*0/i.test(b1) || /Wire\.endTransmission\s*\(\s*\)\s*==\s*0/i.test(b1);
-  const hasOledAddr = /0x3C/i.test(b1) || /OLED_I2C_ADDR/i.test(b1);
-  const hasTodoActive = b1.includes('/* ESCRIBE TU CÓDIGO AQUÍ */');
-
-  let checks = [
-    hasWireBegin ? '✔ Wire.begin(21, 22) configurado.' : '✖ Falta inicializar el bus con Wire.begin(21, 22).',
-    hasWireClock ? '✔ Wire.setClock(400000) en Modo Rápido.' : '✖ Sugerencia: Wire.setClock(400000) para 400kHz.',
-    hasTransmission ? '✔ Transmisión I2C (beginTransmission / endTransmission) activa.' : '✖ Falta tocar la puerta con beginTransmission() y capturar endTransmission().',
-    (hasAckCheck && hasOledAddr) ? '✔ Condición ACK (error == 0) y dirección 0x3C evaluadas.' : '✖ Falta validar la respuesta ACK (error == 0) y la dirección 0x3C.'
-  ];
-
-  const completado = hasWireBegin && hasTransmission && hasAckCheck && !hasTodoActive;
-  if (completado) {
-    console.log(`  ${c.green}${c.bold}ESTADO: ¡RETO 01 COMPLETADO! (1.00 / 1.00 pt)${c.reset}`);
-    bloquesCompletados++;
-    totalPuntos += 1.0;
-  } else {
-    console.log(`  ${c.yellow}${c.bold}ESTADO: EN PROCESO / PENDIENTE (0.00 / 1.00 pt)${c.reset}`);
-  }
-
-  checks.forEach(ch => console.log(`    ${ch.startsWith('✔') ? c.green : c.yellow}${ch}${c.reset}`));
-
-  if (targetBlock === 1) {
-    console.log(`\n${c.bold}💡 Guía Rápida para Simular Reto 01 en Wokwi:${c.reset}`);
-    console.log(`   1. Abre ${c.cyan}bloque_1/diagram.json${c.reset} en VS Code.`);
-    console.log(`   2. Presiona ${c.cyan}F1${c.reset} ➔ escribe ${c.cyan}Wokwi: Start Simulator${c.reset}.`);
-    console.log(`   3. Abre el Monitor Serial (115200 bps) y comprueba que detecte ${c.green}0x3C [OK]${c.reset}.\n`);
-  }
+  const p = evaluarCodigoReal('bloque_1/src/bloque_1.ino', '🟢 Reto 01: Escáner de Direcciones de Hardware I2C (0x3C)', (codigo) => {
+    const hasWireBegin = /Wire\.begin\s*\(\s*(21|I2C_SDA_PIN)\s*,\s*(22|I2C_SCL_PIN)\s*\)/i.test(codigo) || /Wire\.begin\s*\(/i.test(codigo);
+    const hasWireClock = /Wire\.setClock\s*\(\s*(400000|I2C_CLOCK_SPEED)\s*\)/i.test(codigo);
+    const hasTransmission = /Wire\.beginTransmission\s*\(/i.test(codigo) && /Wire\.endTransmission\s*\(/i.test(codigo);
+    const hasAckCheck = /error\s*==\s*0/i.test(codigo) || /Wire\.endTransmission\s*\(\s*\)\s*==\s*0/i.test(codigo);
+    const hasOledAddr = /0x3C/i.test(codigo) || /OLED_I2C_ADDR/i.test(codigo);
+    return [
+      { ok: hasWireBegin, msg: hasWireBegin ? 'El bus quedó inicializado con los pines de datos y de reloj.' : 'Falta inicializar el bus declarando los pines de datos (SDA) y de reloj (SCL).' },
+      { ok: hasWireClock, msg: hasWireClock ? 'Frecuencia del bus elevada a Modo Rápido (400 kHz).' : 'Falta elevar la frecuencia del bus al Modo Rápido (400 kHz).' },
+      { ok: hasTransmission, msg: hasTransmission ? 'Ciclo de consulta por dirección completo (abrir turno y leer respuesta).' : 'Falta el ciclo de consulta: abrir el turno hacia una dirección y leer la respuesta del bus.' },
+      { ok: (hasAckCheck && hasOledAddr), msg: (hasAckCheck && hasOledAddr) ? 'Confirmación del periférico y dirección esperada 0x3C evaluadas.' : 'Falta validar la confirmación del periférico y compararla con la dirección esperada 0x3C.' }
+    ];
+  });
+  registrar(p);
+  if (targetBlock === 1) guiaWokwi(1, 'bloque_1', 'Abre el Monitor Serial (115200 bps) y comprueba que detecte 0x3C [OK].');
 }
 
 // ----------------------------------------------------------------------------
 // EVALUACIÓN BLOQUE 2
 // ----------------------------------------------------------------------------
 function evaluarBloque2() {
-  console.log(`${c.bold}🟡 Reto 02: Inicialización Pantalla OLED SSD1306 & Cabecera Visual${c.reset}`);
-  const b2 = leerArchivo('bloque_2/src/bloque_2.ino');
-  if (!b2) {
-    console.log(`  ${c.red}✖ Archivo 'bloque_2/src/bloque_2.ino' no encontrado.${c.reset}`);
-    return;
-  }
-  checkForbidden(b2, 'bloque_2/src/bloque_2.ino');
-
-  const hasBeginOled = /display\.begin\s*\(\s*SSD1306_SWITCHCAPVCC\s*,\s*(0x3C|OLED_I2C_ADDR)\s*\)/i.test(b2) || /display\.begin/i.test(b2);
-  const hasClear = /display\.clearDisplay\s*\(\s*\)/i.test(b2);
-  const hasTitle = /display\.(print|println)\s*\(\s*.*ESP32/i.test(b2);
-  const hasLine = /display\.drawLine\s*\(/i.test(b2);
-  const hasDisplayCall = /display\.display\s*\(\s*\)/i.test(b2);
-  const hasTodoActive = b2.includes('/* ESCRIBE TU CÓDIGO AQUÍ */');
-
-  let checks = [
-    hasBeginOled ? '✔ display.begin(SSD1306_SWITCHCAPVCC, 0x3C) presente.' : '✖ Falta display.begin(SSD1306_SWITCHCAPVCC, 0x3C).',
-    hasClear ? '✔ Limpieza de memoria buffer con display.clearDisplay().' : '✖ Falta limpiar el buffer RAM con display.clearDisplay().',
-    (hasTitle && hasLine) ? '✔ Cabecera visual y línea divisoria dibujadas.' : '✖ Falta cabecera (>> ESP32 SISTEMA <<) o línea en Y=10.',
-    hasDisplayCall ? '✔ ¡Orden display.display() invocada para volcar al vidrio!' : '✖ ¡ALERTA! Falta display.display() (pantalla en negro).'
-  ];
-
-  const completado = hasBeginOled && hasClear && hasDisplayCall && !hasTodoActive;
-  if (completado) {
-    console.log(`  ${c.green}${c.bold}ESTADO: ¡RETO 02 COMPLETADO! (1.00 / 1.00 pt)${c.reset}`);
-    bloquesCompletados++;
-    totalPuntos += 1.0;
-  } else {
-    console.log(`  ${c.yellow}${c.bold}ESTADO: EN PROCESO / PENDIENTE (0.00 / 1.00 pt)${c.reset}`);
-  }
-
-  checks.forEach(ch => console.log(`    ${ch.startsWith('✔') ? c.green : c.yellow}${ch}${c.reset}`));
-
-  if (targetBlock === 2) {
-    console.log(`\n${c.bold}💡 Guía Rápida para Simular Reto 02 en Wokwi:${c.reset}`);
-    console.log(`   1. Abre ${c.cyan}bloque_2/diagram.json${c.reset} en VS Code.`);
-    console.log(`   2. Inicia la simulación con ${c.cyan}F1 ➔ Wokwi: Start Simulator${c.reset}.`);
-    console.log(`   3. Verifica que aparezca el título ${c.green}>> ESP32 SISTEMA <<${c.reset} con su línea horizontal.\n`);
-  }
+  const p = evaluarCodigoReal('bloque_2/src/bloque_2.ino', '🟡 Reto 02: Inicialización Pantalla OLED SSD1306 & Cabecera Visual', (codigo) => {
+    const hasBeginOled = /display\.begin\s*\(\s*SSD1306_SWITCHCAPVCC\s*,\s*(0x3C|OLED_I2C_ADDR)\s*\)/i.test(codigo) || /display\.begin/i.test(codigo);
+    const hasClear = /display\.clearDisplay\s*\(\s*\)/i.test(codigo);
+    const hasTitle = /display\.(print|println)\s*\(\s*.*ESP32/i.test(codigo);
+    const hasLine = /display\.drawLine\s*\(/i.test(codigo);
+    const hasDisplayCall = /display\.display\s*\(\s*\)/i.test(codigo);
+    return [
+      { ok: hasBeginOled, msg: hasBeginOled ? 'Pantalla arrancada habilitando su bomba de carga interna.' : 'Falta arrancar la pantalla habilitando su bomba de carga interna en la dirección 0x3C.' },
+      { ok: hasClear, msg: hasClear ? 'Memoria intermedia (buffer RAM) limpiada antes de dibujar.' : 'Falta limpiar la memoria intermedia (buffer RAM) antes de dibujar.' },
+      { ok: (hasTitle && hasLine), msg: (hasTitle && hasLine) ? 'Cabecera visual y línea divisoria dibujadas en el buffer.' : 'Falta dibujar la cabecera visual y su línea divisoria horizontal.' },
+      { ok: hasDisplayCall, msg: hasDisplayCall ? 'Volcado del buffer al vidrio físico ejecutado.' : '¡ALERTA! Falta la orden de volcado: el dibujo quedó solo en RAM y la pantalla seguirá negra.' }
+    ];
+  });
+  registrar(p);
+  if (targetBlock === 2) guiaWokwi(2, 'bloque_2', 'Verifica que aparezca el título >> ESP32 SISTEMA << con su línea horizontal.');
 }
 
 // ----------------------------------------------------------------------------
 // EVALUACIÓN BLOQUE 3
 // ----------------------------------------------------------------------------
 function evaluarBloque3() {
-  console.log(`${c.bold}🔵 Reto 03: Telemetría Modular con logBoot()${c.reset}`);
-  const b3 = leerArchivo('bloque_3/src/bloque_3.ino');
-  if (!b3) {
-    console.log(`  ${c.red}✖ Archivo 'bloque_3/src/bloque_3.ino' no encontrado.${c.reset}`);
-    return;
-  }
-  checkForbidden(b3, 'bloque_3/src/bloque_3.ino');
-
-  const hasLogBootDef = /void\s+logBoot\s*\(/i.test(b3);
-  const hasCursorY = /display\.getCursorY\s*\(\s*\)/i.test(b3);
-  const hasRightCol = /display\.setCursor\s*\(\s*(95|90|100|85)\s*,\s*display\.getCursorY\s*\(\s*\)\s*\)/i.test(b3);
-  const hasStatusLabels = /\[OK\]/i.test(b3) && /\[ERR\]/i.test(b3);
-  const hasRefreshInLog = b3.includes('display.display();');
-  const hasTodoActive = b3.includes('/* ESCRIBE TU CÓDIGO AQUÍ */');
-
-  let checks = [
-    hasLogBootDef ? '✔ Función modular logBoot(moduleName, isOk) definida.' : '✖ Falta definir la función modular logBoot().',
-    (hasCursorY && hasRightCol) ? '✔ Alineación dinámica a la derecha con display.getCursorY().' : '✖ Pista: display.setCursor(95, display.getCursorY()) para alinear.',
-    hasStatusLabels ? '✔ Etiquetas [OK] y [ERR] configuradas según estado.' : '✖ Falta imprimir [OK] o [ERR] según la variable isOk.',
-    hasRefreshInLog ? '✔ Refresco del buffer display.display() dentro de la rutina.' : '✖ Falta display.display() para actualizar el renglón.'
-  ];
-
-  const completado = hasLogBootDef && hasCursorY && hasStatusLabels && !hasTodoActive;
-  if (completado) {
-    console.log(`  ${c.green}${c.bold}ESTADO: ¡RETO 03 COMPLETADO! (1.00 / 1.00 pt)${c.reset}`);
-    bloquesCompletados++;
-    totalPuntos += 1.0;
-  } else {
-    console.log(`  ${c.yellow}${c.bold}ESTADO: EN PROCESO / PENDIENTE (0.00 / 1.00 pt)${c.reset}`);
-  }
-
-  checks.forEach(ch => console.log(`    ${ch.startsWith('✔') ? c.green : c.yellow}${ch}${c.reset}`));
-
-  if (targetBlock === 3) {
-    console.log(`\n${c.bold}💡 Guía Rápida para Simular Reto 03 en Wokwi:${c.reset}`);
-    console.log(`   1. Abre ${c.cyan}bloque_3/diagram.json${c.reset} en VS Code.`);
-    console.log(`   2. Inicia Wokwi Simulator con ${c.cyan}F1${c.reset}.`);
-    console.log(`   3. Comprueba que las etiquetas ${c.green}[OK]${c.reset} queden ordenadas en columna derecha.\n`);
-  }
+  const p = evaluarCodigoReal('bloque_3/src/bloque_3.ino', '🔵 Reto 03: Telemetría Modular con logBoot()', (codigo) => {
+    const hasLogBootDef = /void\s+logBoot\s*\(/i.test(codigo);
+    const hasCursorY = /display\.getCursorY\s*\(\s*\)/i.test(codigo);
+    const hasRightCol = /display\.setCursor\s*\(\s*(95|90|100|85)\s*,\s*display\.getCursorY\s*\(\s*\)\s*\)/i.test(codigo);
+    const hasStatusLabels = /\[OK\]/i.test(codigo) && /\[ERR\]/i.test(codigo);
+    const hasRefreshInLog = /display\.display\s*\(\s*\)/i.test(codigo);
+    return [
+      { ok: hasLogBootDef, msg: hasLogBootDef ? 'Función modular de telemetría definida (recibe nombre y estado).' : 'Falta definir la función modular de telemetría, con parámetros de nombre de módulo y estado.' },
+      { ok: (hasCursorY && hasRightCol), msg: (hasCursorY && hasRightCol) ? 'Alineación del estado a la columna derecha sin cambiar de fila.' : 'Falta alinear el estado a la columna derecha conservando la fila actual del cursor.' },
+      { ok: hasStatusLabels, msg: hasStatusLabels ? 'Etiquetas [OK] y [ERR] impresas según el estado booleano.' : 'Falta imprimir la etiqueta de confirmación [OK] o de error [ERR] según el booleano recibido.' },
+      { ok: hasRefreshInLog, msg: hasRefreshInLog ? 'Volcado del buffer al vidrio dentro de la rutina de telemetría.' : 'Falta volcar el buffer al vidrio dentro de la rutina, para que el renglón se vea.' }
+    ];
+  });
+  registrar(p);
+  if (targetBlock === 3) guiaWokwi(3, 'bloque_3', 'Comprueba que las etiquetas [OK] queden ordenadas en columna derecha.');
 }
 
 // ----------------------------------------------------------------------------
 // EVALUACIÓN BLOQUE 4
 // ----------------------------------------------------------------------------
 function evaluarBloque4() {
-  console.log(`${c.bold}🟣 Reto 04: Desafío Integrador POST Completo${c.reset}`);
-  const b4 = leerArchivo('bloque_4/src/bloque_4.ino');
-  if (!b4) {
-    console.log(`  ${c.red}✖ Archivo 'bloque_4/src/bloque_4.ino' no encontrado.${c.reset}`);
-    return;
-  }
-  checkForbidden(b4, 'bloque_4/src/bloque_4.ino');
+  const p = evaluarCodigoReal('bloque_4/src/bloque_4.ino', '🟣 Reto 04: Desafío Integrador POST Completo', (codigo) => {
+    // Solo cuentan las LLAMADAS dentro del cuerpo de cada rutina. Un prototipo o una
+    // definición de la función no aprueba el criterio.
+    const post = cuerpoDe(codigo, 'runSystemPOST');
+    const setup = cuerpoDe(codigo, 'setup');
+    const llamadasLogBoot = (post.match(/logBoot\s*\(/gi) || []).length;
 
-  const hasPostRoutine = /runSystemPOST\s*\(\s*\)/i.test(b4);
-  const hasSubsystems = /logBoot\s*\(\s*".*ESP32/i.test(b4) || /logBoot\s*\(\s*".*I2C/i.test(b4);
-  const hasSystemReady = /showSystemReady\s*\(\s*\)/i.test(b4) || />>\s*SISTEMA LISTO\s*<</i.test(b4);
-  const hasSetupOrchestration = /scanI2CBus/i.test(b4) && /initDisplay/i.test(b4);
-  const hasTodoActive = b4.includes('/* ESCRIBE TU CÓDIGO AQUÍ */');
+    const hasPostRoutine = /showBootHeader\s*\(\s*\)/i.test(post);
+    const hasSubsystems = llamadasLogBoot >= 4;
+    const hasSystemReady = /showSystemReady\s*\(\s*\)/i.test(post);
+    const hasSetupOrchestration = /scanI2CBus\s*\(\s*\)/i.test(setup) && /initDisplay\s*\(\s*\)/i.test(setup) && /runSystemPOST\s*\(\s*\)/i.test(setup);
+    return [
+      { ok: hasPostRoutine, msg: hasPostRoutine ? 'Cabecera visual invocada dentro de la rutina POST.' : 'Falta invocar la cabecera visual dentro de la rutina POST (TODO 4.1).' },
+      { ok: hasSubsystems, msg: hasSubsystems ? 'Los 4 subsistemas (ESP32, I2C, OLED y Batería) reportados por telemetría.' : `Faltan renglones de telemetría dentro del POST: se esperan 4 subsistemas y hay ${llamadasLogBoot} (TODO 4.2).` },
+      { ok: hasSystemReady, msg: hasSystemReady ? 'Cierre de sistema listo invocado dentro de la rutina POST.' : 'Falta el cierre de sistema listo dentro de la rutina POST (TODO 4.3).' },
+      { ok: hasSetupOrchestration, msg: hasSetupOrchestration ? 'Secuencia de arranque enlazada dentro de setup().' : 'Falta enlazar dentro de setup() el censo del bus, el arranque de pantalla y la llamada al POST (TODO 4.4).' }
+    ];
+  });
+  registrar(p);
+  if (targetBlock === 4) guiaWokwi(4, 'bloque_4', 'Observa la secuencia completa de arranque y el mensaje >> SISTEMA LISTO <<.');
+}
 
-  let checks = [
-    hasPostRoutine ? '✔ Rutina runSystemPOST() estructurada.' : '✖ Falta estructurar runSystemPOST().',
-    hasSubsystems ? '✔ Diagnóstico de los 4 subsistemas con logBoot().' : '✖ Falta invocar logBoot() para ESP32, I2C, OLED y Batería.',
-    hasSystemReady ? '✔ Mensaje final >> SISTEMA LISTO << configurado.' : '✖ Falta mostrar el mensaje final de sistema listo.',
-    hasSetupOrchestration ? '✔ Orquestación en setup() (I2C -> Scan -> OLED -> POST).' : '✖ Falta enlazar la secuencia lógica en setup().'
-  ];
-
-  const completado = hasPostRoutine && hasSubsystems && hasSystemReady && !hasTodoActive;
-  if (completado) {
-    console.log(`  ${c.green}${c.bold}ESTADO: ¡RETO 04 COMPLETADO! (1.00 / 1.00 pt)${c.reset}`);
+function registrar(puntaje) {
+  if (puntaje > 0) {
     bloquesCompletados++;
-    totalPuntos += 1.0;
-  } else {
-    console.log(`  ${c.yellow}${c.bold}ESTADO: EN PROCESO / PENDIENTE (0.00 / 1.00 pt)${c.reset}`);
+    totalPuntos += puntaje;
   }
+}
 
-  checks.forEach(ch => console.log(`    ${ch.startsWith('✔') ? c.green : c.yellow}${ch}${c.reset}`));
-
-  if (targetBlock === 4) {
-    console.log(`\n${c.bold}💡 Guía Rápida para Simular Reto 04 en Wokwi:${c.reset}`);
-    console.log(`   1. Abre ${c.cyan}bloque_4/diagram.json${c.reset} en VS Code.`);
-    console.log(`   2. Inicia Wokwi Simulator con ${c.cyan}F1${c.reset}.`);
-    console.log(`   3. Observa la secuencia completa de arranque y el mensaje ${c.green}>> SISTEMA LISTO <<${c.reset}.\n`);
-  }
+function guiaWokwi(n, carpeta, paso) {
+  console.log(`\n${c.bold}💡 Guía Rápida para Simular Reto 0${n} en Wokwi:${c.reset}`);
+  console.log(`   1. Abre ${c.cyan}${carpeta}/diagram.json${c.reset} en VS Code.`);
+  console.log(`   2. Presiona ${c.cyan}F1${c.reset} ➔ escribe ${c.cyan}Wokwi: Start Simulator${c.reset}.`);
+  console.log(`   3. ${paso}\n`);
 }
 
 // ----------------------------------------------------------------------------
@@ -282,7 +289,7 @@ if (targetBlock === 1) {
     console.log(`   ${c.cyan}ℹ️ Tienes ${bloquesCompletados} bloque(s) completado(s). Si la clase terminó, ¡haz commit y PR!${c.reset}`);
     console.log(`   ${c.cyan}   Graba tu video screencast explicando lo que lograste para asegurar tus 5.0 pts orales.${c.reset}`);
   } else {
-    console.log(`   ${c.yellow}ℹ️ Repositorio en estado Starter-Kit. Completa los // TODO: guiándote con el Cheatsheet.${c.reset}`);
+    console.log(`   ${c.yellow}ℹ️ Aún no se detecta código propio en los bloques. Completa los // TODO: guiándote con el Cheatsheet.${c.reset}`);
   }
   console.log(`${c.bold}======================================================================\n${c.reset}`);
 }
