@@ -20,6 +20,12 @@
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET_PIN);
 
+// ----------------------------------------------------------------------------
+// Este bloque es un proyecto independiente: no puede importar los bloques 1 a 3,
+// así que las rutinas ya construidas se incluyen aquí como contexto del integrador.
+// TU TRABAJO está marcado con los // TODO 4.x de más abajo.
+// ----------------------------------------------------------------------------
+
 // Escáner I2C (Reto 01)
 int scanI2CBus() {
     int devicesFound = 0;
@@ -76,7 +82,7 @@ void logBoot(const char* moduleName, bool isOk) {
     delay(200);
 }
 
-// Mensaje de sistema operativo listo
+// Mensaje de sistema operativo listo (Reto 03)
 void showSystemReady() {
     display.drawLine(0, 52, 128, 52, SSD1306_WHITE);
     display.setCursor(10, 55);
@@ -91,19 +97,21 @@ void runSystemPOST() {
     Serial.println("   ESP32: POWER-ON SELF TEST (POST)       ");
     Serial.println("==========================================");
 
-    // TODO 4.1: Mostrar la cabecera visual invocando showBootHeader()
+    // TODO 4.1: Mostrar la cabecera visual del sistema antes de diagnosticar.
+    // Pista Conceptual: La cabecera es un bloque ya construido más arriba; pensá cuál de
+    // esas rutinas dibuja el título y su línea divisoria.
     /* ESCRIBE TU CÓDIGO AQUÍ */
 
-    // TODO 4.2: Probar secuencialmente los 4 subsistemas usando logBoot(nombre, estado):
-    // 1. logBoot("ESP32 240MHz", true);
-    // 2. logBoot("I2C @ 400kHz", true);
-    // 3. logBoot("OLED 0x3C", true);
-    // 4. logBoot("Bateria 8.4V", true);
+    // TODO 4.2: Reportar los 4 subsistemas de la estación (ESP32, bus I2C, pantalla y batería)
+    // usando la rutina de telemetría reutilizable, todos en estado correcto.
+    // Pista Conceptual: Una sola rutina sirve para los cuatro renglones; el nombre del módulo
+    // y su estado se pasan como argumentos.
     /* ESCRIBE TU CÓDIGO AQUÍ */
 
     delay(500);
 
-    // TODO 4.3: Concluir la rutina mostrando la barra final con showSystemReady()
+    // TODO 4.3: Cerrar el arranque mostrando la barra final de sistema listo.
+    // Pista Conceptual: Es la otra rutina ya construida más arriba que cierra la secuencia.
     /* ESCRIBE TU CÓDIGO AQUÍ */
 }
 
@@ -116,11 +124,11 @@ void setup() {
     Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
     Wire.setClock(I2C_CLOCK_SPEED);
 
-    // TODO 4.4: Orquestar el arranque:
-    // 1. Escanear bus: int total = scanI2CBus();
-    // 2. Si total > 0 y la pantalla se inicializa con initDisplay():
-    //    Ejecutar runSystemPOST();
-    // 3. Si no, reportar falla por el Serial Monitor.
+    // TODO 4.4: Orquestar la secuencia de arranque: censar el bus, y solo si hay al menos
+    // un periférico presente y la pantalla quedó operativa, lanzar la rutina POST.
+    // Si algo falta, informar la falla por el Monitor Serie.
+    // Pista Conceptual: Recordá que el censo devuelve un número y el arranque de la pantalla
+    // devuelve un valor lógico: los dos tienen que estar bien para continuar.
     /* ESCRIBE TU CÓDIGO AQUÍ */
 }
 

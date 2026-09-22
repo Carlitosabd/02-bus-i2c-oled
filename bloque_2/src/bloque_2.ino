@@ -29,26 +29,18 @@ void setup() {
     // TODO 2.1: Arrancar la pantalla activando la bomba de carga interna (charge pump)
     // pasando la constante SSD1306_SWITCHCAPVCC y la dirección 0x3C.
     // Pregunta Guía: ¿Qué hace la bomba de carga con el voltaje de 3.3V?
-    // if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR)) {
-    //     Serial.println("[OLED] ❌ ERROR: Pantalla no detectada en 0x3C.");
-    //     while (true); // Detiene la ejecución si hay falla física
-    // }
+    // Pista de Hardware: El panel necesita que su circuito elevador interno genere el voltaje de trabajo; si no se habilita, la pantalla queda apagada aunque el bus responda.
 
     Serial.println("[OLED] Pantalla SSD1306 inicializada [OK]");
 
     // TODO 2.2: Construir la cabecera visual en el buffer RAM:
-    // 1. Limpiar el cuaderno borrador en RAM con display.clearDisplay();
-    // 2. Definir color blanco con display.setTextColor(SSD1306_WHITE);
-    // 3. Definir tamaño de letra 1 con display.setTextSize(1);
-    // 4. Ubicar el cursor en (X=8, Y=0) con display.setCursor(8, 0);
-    // 5. Escribir el título: display.println(">> ESP32 SISTEMA <<");
-    // 6. Trazar una línea horizontal en Y=10: display.drawLine(0, 10, 128, 10, SSD1306_WHITE);
+    // Pista Conceptual: Todo dibujo ocurre primero en una memoria intermedia; ordená los trazos (fondo, color, tamaño, posición, texto y línea divisoria) pensando en qué debe quedar visible al final.
     /* ESCRIBE TU CÓDIGO AQUÍ */
 
     // TODO 2.3: ¡LA ORDEN MÁGICA!
     // Pregunta Clave: Si solo escribiste en la memoria RAM, ¿por qué la pantalla sigue negra?
     // ¿Qué orden vuelca el buffer hacia los píxeles físicos del vidrio?
-    // display.display();
+    // Pista Conceptual: Mientras no exista una orden de volcado, la pantalla seguirá negra aunque el buffer ya tenga el dibujo.
 
     Serial.println("[OLED] Cabecera visual renderizada exitosamente.");
 }

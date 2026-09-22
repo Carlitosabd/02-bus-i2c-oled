@@ -19,25 +19,20 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET_PIN);
 // Función modular reutilizable para imprimir módulos con estado alineado
 void logBoot(const char* moduleName, bool isOk) {
     // TODO 3.1: Imprimir el nombre del módulo en la posición actual del cursor:
-    // display.print(moduleName);
+    // Pista Conceptual: Escribí el nombre del módulo sin avanzar de renglón, para conservar la fila donde luego se alineará el estado.
     /* ESCRIBE TU CÓDIGO AQUÍ */
 
     // TODO 3.2: Alinear el estado a la derecha en la columna X=95 sin alterar la fila Y actual.
     // Pregunta Guía: ¿Por qué usamos display.getCursorY() en lugar de un número fijo como 20?
-    // Pista: display.setCursor(95, display.getCursorY());
+    // Pista Conceptual: Para que los estados queden en columna, reubicá el origen de escritura en la misma fila pero en una coordenada horizontal fija.
     /* ESCRIBE TU CÓDIGO AQUÍ */
 
     // TODO 3.3: Según el valor de isOk (true/false), imprimir "[OK]" o "[ERR]":
-    // if (isOk) {
-    //     display.println("[OK]");
-    // } else {
-    //     display.println("[ERR]");
-    // }
+    // Pista Conceptual: El estado depende del valor booleano recibido: un valor verdadero muestra confirmación y uno falso muestra error.
     /* ESCRIBE TU CÓDIGO AQUÍ */
 
     // TODO 3.4: Volcar los cambios del buffer al vidrio físico y pausar 200ms para efecto visual:
-    // display.display();
-    // delay(200);
+    // Pista Conceptual: Nada llega al vidrio hasta que se vuelca la memoria intermedia; agregá una pausa breve para que el ojo siga la secuencia.
 }
 
 void setup() {
@@ -64,8 +59,7 @@ void setup() {
     display.display();
 
     // TODO 3.5: Probar la función logBoot() con dos módulos de prueba:
-    // logBoot("ESP32 Core", true);
-    // logBoot("Sensor I2C", true);
+    // Pista Conceptual: Invocá la función de telemetría una vez por cada módulo de prueba, indicando su nombre y si superó la verificación.
     /* ESCRIBE TU CÓDIGO AQUÍ */
 
     Serial.println("[BLOQUE 3] Telemetría renderizada correctamente.");

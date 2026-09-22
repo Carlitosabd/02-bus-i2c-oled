@@ -27,37 +27,13 @@ El bus I2C permite conectar múltiples sensores usando solo **2 cables**:
 * **El Número de Lista (Dirección `0x3C`):** Cada componente tiene un número de lista único. La pantalla OLED SSD1306 responde exclusivamente a la dirección **`0x3C`**.
 
 ### Código de Arduino para el Escáner I2C (`Wire.h`):
-```cpp
-#include <Wire.h>
+El escaneo ocurre en dos tiempos: primero se prepara el escenario y después se pasa lista, dirección por dirección.
 
-void setup() {
-  Serial.begin(115200);
-  Wire.begin(21, 22);    // 1. Inicializa bus: SDA = GPIO21, SCL = GPIO22
-  Wire.setClock(400000); // 2. Modo rápido a 400 kHz
-
-  Serial.println("[I2C] Iniciando escaneo de bus...");
-  int encontrados = 0;
-
-  // 3. Recorremos las direcciones del 1 al 126
-  for (byte address = 1; address < 127; address++) {
-    Wire.beginTransmission(address);     // Toca la puerta del sensor
-    byte error = Wire.endTransmission(); // 0 = ¡Presente! (ACK)
-
-    if (error == 0) {
-      Serial.print("[I2C] Dispositivo detectado en direccion: 0x");
-      if (address < 16) Serial.print("0");
-      Serial.print(address, HEX);
-      if (address == 0x3C) Serial.print(" [OK - Pantalla OLED SSD1306]");
-      Serial.println();
-      encontrados++;
-    }
-  }
-
-  Serial.printf("[I2C] Escaneo finalizado. Total perifericos: %d\n", encontrados);
-}
-
-void loop() {}
-```
+1. **Abrir el canal de diagnóstico:** se inicia la comunicación con la computadora para poder leer los resultados en el Monitor Serial.
+2. **Encender el bus:** se declaran las dos líneas físicas que compartirán los periféricos —la de datos (GPIO21) y la de reloj (GPIO22)— y se eleva la frecuencia del reloj al Modo Rápido (400 kHz) antes del primer intercambio.
+3. **Recorrer las direcciones válidas:** el escáner visita una por una las 126 direcciones de 7 bits (de la 1 a la 126). En cada visita abre un turno hacia esa dirección y lee la respuesta del bus.
+4. **Interpretar la confirmación:** si el periférico contesta con ACK, la dirección se lista como presente, se marca con una etiqueta especial cuando coincide con `0x3C` (la pantalla OLED) y el contador de periféricos avanza. Si nadie contesta, esa dirección se descarta y el contador no cambia.
+5. **Cerrar el censo:** al terminar el recorrido se informa por el Monitor Serial cuántos periféricos respondieron en total.
 
 > [!TIP]
 > **Preguntas Clave para el Taller:**
@@ -76,24 +52,15 @@ La pantalla de $128 \times 64$ tiene 8,192 píxeles monocromáticos ($1024\text{
 * **La Pizarra Real:**  
   Para que aparezca en el vidrio físico, debes invocar la orden obligatoria: **`display.display();`**.
 
-```cpp
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+**Secuencia de encendido (concepto y orden de pasos):**
 
-Adafruit_SSD1306 display(128, 64, &Wire, -1);
-
-void setup() {
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // 1. Inicializa en 0x3C con bomba de carga
-  display.clearDisplay();                    // 2. Limpia el cuaderno borrador
-  display.setTextSize(1);                    // 3. Tamaño de letra (6x8 px)
-  display.setTextColor(SSD1306_WHITE);       // 4. Color blanco
-  display.setCursor(0, 0);                   // 5. Ubica el lápiz en (X=0, Y=0)
-  display.println(">> ESP32 SISTEMA <<");       // 6. Escribe en el borrador
-  display.drawLine(0, 10, 128, 10, SSD1306_WHITE); // 7. Dibuja línea horizontal
-  display.display();                         // 8. ¡VUELCA AL VIDRIO REAL!
-}
-```
+1. **Declarar las librerías necesarias:** el bus I2C, el motor gráfico y el controlador del panel.
+2. **Construir el objeto de la pantalla** con sus cuatro parámetros clave: ancho, alto, referencia al bus y pin de reset (ver tabla siguiente).
+3. **Arrancar el controlador:** se habilita la bomba de carga interna para elevar el voltaje y se indica la dirección del bus donde vive el panel (`0x3C`).
+4. **Limpiar el borrador:** se vacía la memoria intermedia para no arrastrar píxeles de encendidos anteriores.
+5. **Elegir el estilo del lápiz:** tamaño de letra, color y posición inicial del cursor (origen arriba a la izquierda).
+6. **Escribir el contenido en el borrador:** un título de sistema y una línea divisoria horizontal.
+7. **Volcar al vidrio real:** recién en este último paso la imagen sale de la memoria intermedia y aparece físicamente en la pantalla.
 
 ### 🔍 ¿Qué significa cada parámetro de `Adafruit_SSD1306 display(128, 64, &Wire, -1)`?
 
@@ -119,23 +86,12 @@ void setup() {
 
 Para no copiar y pegar 4 veces el mismo código al chequear componentes, usamos una función reusable con alineación dinámica:
 
-```cpp
-void logBoot(const char* nombreModulo, bool estadoOk) {
-  display.print(nombreModulo);
-  
-  // getCursorY() mantiene la fila actual para no sobreescribir
-  display.setCursor(95, display.getCursorY()); // Salta a la derecha en X=95
-  
-  if (estadoOk) {
-    display.println("[OK]");
-  } else {
-    display.println("[ERR]");
-  }
-  
-  display.display(); // Actualiza el display físico
-  delay(200);        // Pausa visual para ver la secuencia
-}
-```
+**Secuencia de la rutina (concepto y orden de pasos):**
+
+1. **Escribir el nombre del módulo** en la fila actual del borrador, sin avanzar de renglón.
+2. **Reposicionar el cursor** en la misma fila pero en una columna fija a la derecha (X=95); se reutiliza la coordenada vertical actual para que los renglones no se encimen.
+3. **Elegir la etiqueta de estado** según el valor booleano recibido: confirmación cuando el módulo superó su verificación, error cuando no.
+4. **Volcar el borrador al vidrio** para que el renglón se vea y **pausar brevemente** la secuencia para que el ojo humano la siga.
 
 > [!TIP]
 > **Pregunta Clave:**  
@@ -149,14 +105,14 @@ Al encenderse, el ESP32 ejecuta su auto-diagnóstico (Power-On Self-Test):
 
 ```text
 ┌────────────────────────┐
-│ >> ESP32 SISTEMA <<    │  <- showBootHeader()
+│ >> ESP32 SISTEMA <<    │  <- cabecera visual de arranque
 ├────────────────────────┤
-│ ESP32 240MHz      [OK] │  <- logBoot("ESP32 240MHz", true)
-│ I2C @ 400kHz      [OK] │  <- logBoot("I2C @ 400kHz", true)
-│ OLED 0x3C         [OK] │  <- logBoot("OLED 0x3C", true)
-│ Bateria 8.4V      [OK] │  <- logBoot("Bateria 8.4V", true)
+│ ESP32 240MHz      [OK] │  <- un renglón de telemetría por
+│ I2C @ 400kHz      [OK] │     subsistema, con el estado
+│ OLED 0x3C         [OK] │     alineado a la derecha
+│ Bateria 8.4V      [OK] │
 ├────────────────────────┤
-│ >> SISTEMA LISTO <<    │  <- showSystemReady()
+│ >> SISTEMA LISTO <<    │  <- cierre de la rutina de arranque
 └────────────────────────┘
 ```
 
