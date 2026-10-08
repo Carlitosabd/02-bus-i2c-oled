@@ -20,14 +20,10 @@ void setup() {
     Serial.println("========================================================");
 
     // TODO 1.1: Inicializar el bus I2C en los pines SDA y SCL del ESP32.
-    // Pregunta Guía: ¿Qué función de la librería Wire recibe (SDA_PIN, SCL_PIN)?
-    // Pista: Usa Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-    /* ESCRIBE TU CÓDIGO AQUÍ */
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
 
     // TODO 1.2: Configurar la velocidad del reloj a 400kHz (Modo Rápido).
-    // Pregunta Guía: ¿Qué función configura la frecuencia de reloj del bus I2C?
-    // Pista: Usa Wire.setClock(I2C_CLOCK_SPEED);
-    /* ESCRIBE TU CÓDIGO AQUÍ */
+    Wire.setClock(I2C_CLOCK_SPEED);
 
     Serial.println("[I2C] Bus configurado en SDA:GPIO21, SCL:GPIO22 a 400kHz.\n");
     Serial.println("--- INICIANDO BARRIDO DE DIRECCIONES (0x01 .. 0x7E) ---");
@@ -38,21 +34,19 @@ void setup() {
     for (byte address = 1; address < 127; address++) {
 
         // TODO 1.4: Tocar la puerta del periférico:
-        // 1. Iniciar transmisión con Wire.beginTransmission(address);
-        // 2. Finalizar transmisión capturando el byte de error: byte error = Wire.endTransmission();
-        /* ESCRIBE TU CÓDIGO AQUÍ */
+        Wire.beginTransmission(address);
+        byte error = Wire.endTransmission();
 
         // TODO 1.5: Evaluar la respuesta del periférico:
-        // Pregunta Guía: ¿Qué valor devuelve Wire.endTransmission() cuando el periférico responde con ACK (Presente)?
-        // if (error == 0) {
-        //     Serial.printf("[I2C] Dispositivo detectado en: 0x%02X ", address);
-        //     if (address == OLED_I2C_ADDR) {
-        //         Serial.println("➔ [Display OLED SSD1306] [OK]");
-        //     } else {
-        //         Serial.println("➔ [Periférico Desconocido]");
-        //     }
-        //     devicesFound++;
-        // }
+        if (error == 0) {
+            Serial.printf("[I2C] Dispositivo detectado en: 0x%02X ", address);
+            if (address == OLED_I2C_ADDR) {
+                Serial.println("➔ [Display OLED SSD1306] [OK]");
+            } else {
+                Serial.println("➔ [Periférico Desconocido]");
+            }
+            devicesFound++;
+        }
     }
 
     if (devicesFound == 0) {
