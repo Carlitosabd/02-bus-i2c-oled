@@ -28,27 +28,24 @@ void setup() {
 
     // TODO 2.1: Arrancar la pantalla activando la bomba de carga interna (charge pump)
     // pasando la constante SSD1306_SWITCHCAPVCC y la dirección 0x3C.
-    // Pregunta Guía: ¿Qué hace la bomba de carga con el voltaje de 3.3V?
-    // if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR)) {
-    //     Serial.println("[OLED] ❌ ERROR: Pantalla no detectada en 0x3C.");
-    //     while (true); // Detiene la ejecución si hay falla física
-    // }
+    if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR)) {
+        Serial.println("[OLED] ❌ ERROR: Pantalla no detectada en 0x3C.");
+        while (true); // Detiene la ejecución si hay falla física
+    }
 
     Serial.println("[OLED] Pantalla SSD1306 inicializada [OK]");
 
     // TODO 2.2: Construir la cabecera visual en el buffer RAM:
-    // 1. Limpiar el cuaderno borrador en RAM con display.clearDisplay();
-    // 2. Definir color blanco con display.setTextColor(SSD1306_WHITE);
-    // 3. Definir tamaño de letra 1 con display.setTextSize(1);
-    // 4. Ubicar el cursor en (X=8, Y=0) con display.setCursor(8, 0);
-    // 5. Escribir el título: display.println(">> ESP32 SISTEMA <<");
-    // 6. Trazar una línea horizontal en Y=10: display.drawLine(0, 10, 128, 10, SSD1306_WHITE);
-    /* ESCRIBE TU CÓDIGO AQUÍ */
+    display.clearDisplay();                          // 1. Limpia el cuaderno borrador en RAM
+    display.setTextColor(SSD1306_WHITE);             // 2. Define color de texto blanco
+    display.setTextSize(1);                          // 3. Define tamaño de letra 1
+    display.setCursor(8, 0);                         // 4. Ubica el cursor en X=8, Y=0
+    display.println(">> ESP32 SISTEMA <<");          // 5. Escribe el título en el borrador
+    display.drawLine(0, 10, 128, 10, SSD1306_WHITE); // 6. Traza línea horizontal divisoria en Y=10
 
     // TODO 2.3: ¡LA ORDEN MÁGICA!
-    // Pregunta Clave: Si solo escribiste en la memoria RAM, ¿por qué la pantalla sigue negra?
-    // ¿Qué orden vuelca el buffer hacia los píxeles físicos del vidrio?
-    // display.display();
+    // Transfiere los 1024 bytes del framebuffer en RAM hacia el vidrio físico
+    display.display();
 
     Serial.println("[OLED] Cabecera visual renderizada exitosamente.");
 }
